@@ -1,0 +1,106 @@
+# 基础镜像选择Ubuntu 20.04（兼容性好）
+FROM ubuntu:20.04
+
+# 设置环境变量，避免交互提示
+ENV DEBIAN_FRONTEND=noninteractive
+
+# 安装依赖（Java 8是Hadoop 3.3.6的推荐版本）
+RUN apt update && apt install -y \
+    openjdk-8-jdk \
+    wget \
+    ssh \
+    rsync \
+    vim \
+    && rm -rf /var/lib/apt/lists/*
+
+# 设置Java环境变量
+ENV JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64
+ENV PATH=$PATH:$JAVA_HOME/bin
+
+# 下载并解压Hadoop 3.3.6
+RUN wget https://archive.apache.org/dist/hadoop/common/hadoop-3.3.6/hadoop-3.3.6.tar.gz \
+    && tar -xzf hadoop-3.3.6.tar.gz -C /usr/local/ \
+    && rm hadoop-3.3.6.tar.gz \
+    && ln -s /usr/local/hadoop-3.3.6 /usr/local/hadoop
+
+# 设置Hadoop环境变量
+ENV HADOOP_HOME=/usr/local/hadoop
+ENV HADOOP_CONF_DIR=$HADOOP_HOME/etc/hadoop
+ENV PATH=$PATH:$HADOOP_HOME/bin:$HADOOP_HOME/sbin
+
+# 配置SSH免密登录（Hadoop集群必需）
+RUN ssh-keygen -t rsa -P '' -f ~/.ssh/id_rsa \
+    && cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys \
+    && chmod 0600 ~/.ssh/authorized_keys
+
+# 修改Hadoop核心配置文件
+## 1. core-site.xml（指定HDFS地址：hdfs://master:8020）
+RUN echo '<?xml version="1.0" encoding="UTF-8"?>\
+<?xml-stylesheet type="text/xsl" href="configuration.xsl"?>\
+<configuration>\
+    <property>\
+        <name>fs.defaultFS</name>\
+        <value>hdfs://master:8020</value>\
+    </property>\
+</configuration>' > $HADOOP_CONF_DIR/core-site.xml
+
+## 2. hdfs-site.xml（单机模式，副本数1）
+RUN echo '<?xml version="1.0" encoding="UTF-8"?>\
+<?xml-stylesheet type="text/xsl" href="configuration.xsl"?>\
+<configuration>\
+    <property>\
+        <name>dfs.replication</name>\
+        <value>1</value>\
+    </property>\
+</configuration>' > $HADOOP_CONF_DIR/hdfs-site.xml
+
+## 3. yarn-site.xml（指定YARN地址：master:8032）
+RUN echo '<?xml version="1.0" encoding="UTF-8"?>\
+<?xml-stylesheet type="text/xsl" href="configuration.xsl"?>\
+<configuration>\
+    <property>\
+        <name>yarn.resourcemanager.address</name>\
+        <value>master:8032</value>\
+    </property>\
+    <property>\
+        <name>yarn.nodemanager.aux-services</name>\
+        <value>mapreduce_shuffle</value>\
+    </property>\
+    <property>\
+        <name>yarn.resourcemanager.webapp.address</name>\
+        <value>master:8088</value>\
+    </property>\
+</configuration>' > $HADOOP_CONF_DIR/yarn-site.xml
+
+## 4. mapred-site.xml（指定MapReduce使用YARN）
+RUN echo '<?xml version="1.0" encoding="UTF-8"?>\
+<?xml-stylesheet type="text/xsl" href="configuration.xsl"?>\
+<configuration>\
+    <property>\
+        <name>mapreduce.framework.name</name>\
+        <value>yarn</value>\
+    </property>\
+</configuration>' > $HADOOP_CONF_DIR/mapred-site.xml
+
+## 5. 修改hadoop-env.sh（指定Java路径）
+RUN echo "export JAVA_HOME=$JAVA_HOME" >> $HADOOP_CONF_DIR/hadoop-env.sh
+
+# 初始化HDFS并启动所有服务的脚本（容器启动时执行）
+RUN touch /start-hadoop.sh && chmod +x /start-hadoop.sh
+RUN echo '#!/bin/bash' >> /start-hadoop.sh
+# 启动时添加master主机名映射（解决/etc/hosts只读问题）
+RUN echo 'echo "127.0.0.1 master" >> /etc/hosts' >> /start-hadoop.sh
+# 格式化HDFS（仅第一次执行，-force强制格式化）
+RUN echo 'hdfs namenode -format -force' >> /start-hadoop.sh
+# 启动HDFS服务
+RUN echo 'start-dfs.sh' >> /start-hadoop.sh
+# 启动YARN服务
+RUN echo 'start-yarn.sh' >> /start-hadoop.sh
+# 保持容器后台运行（避免启动后退出）
+RUN echo 'tail -f /dev/null' >> /start-hadoop.sh
+
+# 暴露端口（可选，用于调试）
+EXPOSE 8020 8032 8088 50070
+
+# 启动时执行脚本
+CMD ["/start-hadoop.sh"]
