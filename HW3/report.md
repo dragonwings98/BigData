@@ -21,7 +21,7 @@ ER diagram
     ![task_1](assets/task_1-20251215225939-axnv3md.png)
 2. Вывести имена и фамилии клиентов с именем Carolyn.
 
-    ​`SELECT first_name, last_name FROM customer
+    ​`SELECT first_name, last_name FROM customer  
    WHERE first_name = 'Carolyn';`
 
     ![task_2](assets/task_2-20251215230000-gqw1meb.png)
