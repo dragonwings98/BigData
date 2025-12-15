@@ -21,23 +21,24 @@ ER diagram
     ![task_1](assets/task_1-20251215225939-axnv3md.png)
 2. Вывести имена и фамилии клиентов с именем Carolyn.
 
-    ​`SELECT first_name, last_name FROM customer  
+    ​`SELECT first_name, last_name FROM customer
+   
    WHERE first_name = 'Carolyn';`
 
     ![task_2](assets/task_2-20251215230000-gqw1meb.png)
-3. Вывести полные имена клиентов (имя + фамилия в одной колонке), у которых имя или фамилия содержат подстроку ary (например: Mary, Geary).
+4. Вывести полные имена клиентов (имя + фамилия в одной колонке), у которых имя или фамилия содержат подстроку ary (например: Mary, Geary).
 
     ​`SELECT CONCAT(first_name, ' ', last_name) AS full_name FROM customer`
     `WHERE first_name LIKE '%ary%' OR last_name LIKE '%ary%';`
 
     ![task_3](assets/task_3-20251215230203-lyvtzt3.png)
 
-4. Вывести 20 самых крупных транзакций (таблица payment).
+5. Вывести 20 самых крупных транзакций (таблица payment).
 
     ​`SELECT * FROM payment ORDER BY amount DESC LIMIT 20;`
 
     ![task_4](assets/task_4-20251215230208-wtjrttf.png)
-5. Вывести адреса всех магазинов, используя подзапрос.
+6. Вывести адреса всех магазинов, используя подзапрос.
 
     ​`SELECT address`
     `FROM public.address`
