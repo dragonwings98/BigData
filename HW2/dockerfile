@@ -1,0 +1,76 @@
+# Base Image: Ubuntu 20.04 + JDK8
+FROM ubuntu:20.04
+
+# Environment Variables (修正注释格式 + 正确HIVE_HOME路径)
+ENV JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64
+ENV HADOOP_HOME=/opt/hadoop-3.3.4
+# 核心修正1：注释单独成行，避免语法错误
+ENV HIVE_HOME=/opt/apache-hive-3.1.3-bin
+# 核心修正2：PATH包含Hive的bin目录
+ENV PATH=$PATH:$JAVA_HOME/bin:$HADOOP_HOME/bin:$HADOOP_HOME/sbin:$HIVE_HOME/bin
+ENV HADOOP_OPTS="-Djava.library.path=$HADOOP_HOME/lib/native"
+ENV LC_ALL=C.UTF-8
+
+# Hadoop User Config (注释单独行)
+ENV HDFS_NAMENODE_USER="root"
+ENV HDFS_DATANODE_USER="root"
+ENV HDFS_SECONDARYNAMENODE_USER="root"
+ENV YARN_RESOURCEMANAGER_USER="root"
+ENV YARN_NODEMANAGER_USER="root"
+
+# Install Dependencies
+RUN apt update && apt install -y \
+    openjdk-8-jdk \
+    ssh \
+    rsync \
+    wget \
+    nano \
+    postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
+
+# SSH Config
+RUN ssh-keygen -t rsa -P '' -f ~/.ssh/id_rsa \
+    && cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys \
+    && chmod 0600 ~/.ssh/authorized_keys
+
+# Download Hadoop 3.3.4 (Official Source)
+RUN wget https://archive.apache.org/dist/hadoop/common/hadoop-3.3.4/hadoop-3.3.4.tar.gz \
+    && tar -xzf hadoop-3.3.4.tar.gz -C /opt/ \
+    && rm hadoop-3.3.4.tar.gz
+
+# Hadoop Env Config
+RUN echo "export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64" >> $HADOOP_HOME/etc/hadoop/hadoop-env.sh \
+    && echo "export HDFS_NAMENODE_USER=\"root\"" >> $HADOOP_HOME/etc/hadoop/hadoop-env.sh \
+    && echo "export HDFS_DATANODE_USER=\"root\"" >> $HADOOP_HOME/etc/hadoop/hadoop-env.sh \
+    && echo "export HDFS_SECONDARYNAMENODE_USER=\"root\"" >> $HADOOP_HOME/etc/hadoop/hadoop-env.sh \
+    && echo "export YARN_RESOURCEMANAGER_USER=\"root\"" >> $HADOOP_HOME/etc/hadoop/hadoop-env.sh \
+    && echo "export YARN_NODEMANAGER_USER=\"root\"" >> $HADOOP_HOME/etc/hadoop/hadoop-env.sh
+
+# Download Hive 3.1.3 (Official Source)
+RUN wget https://archive.apache.org/dist/hive/hive-3.1.3/apache-hive-3.1.3-bin.tar.gz \
+    && tar -xzf apache-hive-3.1.3-bin.tar.gz -C /opt/ \
+    && rm apache-hive-3.1.3-bin.tar.gz
+
+# 核心修复：Hive命令全局可执行（路径已修正）
+RUN chmod +x $HIVE_HOME/bin/* \
+    && ln -s $HIVE_HOME/bin/schematool /usr/local/bin/schematool \
+    && ln -s $HIVE_HOME/bin/hive /usr/local/bin/hive
+
+# Copy Config Files（HIVE_HOME路径自动适配）
+COPY conf/core-site.xml $HADOOP_HOME/etc/hadoop/
+COPY conf/hdfs-site.xml $HADOOP_HOME/etc/hadoop/
+COPY conf/yarn-site.xml $HADOOP_HOME/etc/hadoop/
+COPY conf/hive-site.xml $HIVE_HOME/conf/
+
+# Copy Init Script
+COPY scripts/init-hive.sh /opt/
+RUN chmod +x /opt/init-hive.sh
+
+# Create HDFS Directories
+RUN mkdir -p /opt/hadoop_data/hdfs/namenode /opt/hadoop_data/hdfs/datanode
+
+# Expose Ports
+EXPOSE 9870 8088 10000 9083
+
+# Start Script
+CMD ["/opt/init-hive.sh"]

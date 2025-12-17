@@ -1,0 +1,57 @@
+# 移除顶部的version: '3.8'（消除告警）
+services:
+  postgres:
+    image: postgres:13
+    container_name: postgres-hive
+    environment:
+      POSTGRES_USER: hive
+      POSTGRES_PASSWORD: hive123
+      POSTGRES_DB: metastore_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - hadoop-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hive -d metastore_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  hadoop-hive:
+    build: .
+    container_name: hadoop-hive
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - HIVE_METASTORE_DB=metastore_db
+      - HIVE_METASTORE_USER=hive
+      - HIVE_METASTORE_PASSWORD=hive123
+      - POSTGRES_HOST=postgres
+    ports:
+      - "9870:9870"
+      - "8088:8088"
+      - "10000:10000"
+      - "9083:9083"
+    volumes:
+      - hadoop_data:/opt/hadoop_data
+      - ./datasets:/opt/datasets
+    networks:
+      - hadoop-network
+    privileged: true
+    tty: true
+    # 新增：输出启动日志，便于排查
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+
+networks:
+  hadoop-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  hadoop_data:
